@@ -29,6 +29,8 @@ android {
 }
 
 dependencies {
+    implementation 'com.github.bhlangonijr:chesslib:1.2.5'
+    implementation 'com.google.code.gson:gson:2.8.5'
     implementation group: 'org.json', name: 'json', version: '20090211'
     implementation 'com.squareup.okhttp3:okhttp:3.14.6'
     implementation 'androidx.appcompat:appcompat:1.2.0'

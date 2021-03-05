@@ -4,6 +4,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.hardware.Sensor;
@@ -11,12 +12,18 @@ import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
 import android.widget.Button;
+import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.gson.Gson;
+
+import java.lang.reflect.Type;
 import java.util.HashMap;
+import java.util.Map;
 
 import ch.laurin.shakechess.GameController;
 import ch.laurin.shakechess.R;
@@ -52,11 +59,46 @@ public class GameActivity extends AppCompatActivity {
         mAccel = 0.00f;
         mAccelCurrent = SensorManager.GRAVITY_EARTH;
         mAccelLast = SensorManager.GRAVITY_EARTH;
+
+    }
+
+
+    @Override
+    protected void onPause() {
+        sensorManager.unregisterListener(mSensorListener);
+        SharedPreferences sharedPreferences = getSharedPreferences("shakeChess", MODE_PRIVATE);
+        SharedPreferences.Editor prefsEditor = sharedPreferences.edit();
+        if(!gameController.isGameFinished()) {
+            Gson gson = new Gson();
+            String json = gson.toJson(gameController.getChessBoard());
+            prefsEditor.putString("lastGame", json);
+            prefsEditor.apply();
+        } else {
+            prefsEditor.putString("lastGame", "");
+            prefsEditor.apply();
+        }
+        super.onPause();
     }
 
     private void startGame() {
-        loadChessBoard();
-        gameController = new GameController(this, apiService);
+        Bundle bundle = getIntent().getExtras();
+        if (bundle.getBoolean("resumeGame")) {
+            SharedPreferences sharedPreferences = getSharedPreferences("shakeChess", MODE_PRIVATE);
+            Gson gson = new Gson();
+            ChessBoard chessBoard = gson.fromJson(sharedPreferences.getString("lastGame", ""), ChessBoard.class);
+            loadChessBoard();
+            gameController = new GameController(this, apiService, chessBoard);
+        } else {
+            loadChessBoard();
+            gameController = new GameController(this, apiService);
+        }
+    }
+
+    public void showText(String text) {
+        runOnUiThread(() -> {
+            TextView textView = (TextView) findViewById(R.id.text);
+            textView.setText(text);
+        });
     }
 
     public void updateViewChessBoard(ChessBoard board) {
@@ -122,7 +164,12 @@ public class GameActivity extends AppCompatActivity {
             float delta = mAccelCurrent - mAccelLast;
             mAccel = mAccel * 0.9f + delta;
             if (mAccel > 2) {
-                //TODO shake event
+                new Handler().postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        gameController.takeBackLastMove();
+                    }
+                }, 2000);
             }
         }
 
@@ -137,11 +184,6 @@ public class GameActivity extends AppCompatActivity {
         sensorManager.registerListener(mSensorListener, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
     }
 
-    @Override
-    protected void onPause() {
-        sensorManager.unregisterListener(mSensorListener);
-        super.onPause();
-    }
 
     private ServiceConnection connection = new ServiceConnection() {
         @Override
